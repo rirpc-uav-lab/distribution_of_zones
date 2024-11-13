@@ -31,7 +31,6 @@ private:
 
     void add(const std::shared_ptr<uav_msgs::srv::Zone::Request> request, std::shared_ptr<uav_msgs::srv::Zone::Response> response)
     {
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ");
       std::shared_ptr<std::vector<geometry_msgs::msg::Polygon>> polygon = std::make_shared<std::vector<geometry_msgs::msg::Polygon>>(); // Множество зон для распределения по дронам
       std::shared_ptr<std::vector<geometry_msgs::msg::Point32>> the_centers_of_the_zones = std::make_shared<std::vector<geometry_msgs::msg::Point32>>(); // Центры зон из множества зон
 
@@ -49,14 +48,17 @@ private:
       *odometry = request->odom;
 
       if (polygon->empty())
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA пустой нахуй");
-      else 
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA непустой нахуй");
-      
+      {
+      RCLCPP_INFO_STREAM(this->get_logger(), "polygon is empty");
+      return;
+      }
+
       if (odometry->empty())
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA пустой нахуй");
-      else 
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA непустой нахуй");
+      {
+      RCLCPP_INFO_STREAM(this->get_logger(), "polygon is empty");
+      return;
+      }
+
 
       for (int index = 0; index < odometry->size(); ++index)
       {
@@ -65,17 +67,24 @@ private:
           polygon_for_all_drone->emplace_back();
 
       }
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA прошёл дальше фораааа аааааа");
 
       add_areas_and_centers(polygon, the_centers_of_the_zones, the_areas_of_the_polygon_zones); // заполняем the_areas_of_the_polygon_zones и the_centers_of_the_zones
-      RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA нашёл площади и центры АААААААААААААААААААА");
 
       while(!polygon->empty())
       {
-        RCLCPP_INFO_STREAM(this->get_logger(), "ЗАШЁЛ В ГОЛОВНОЙ ЦИКЛ WHILE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         for (int drone_number = 0; drone_number < odometry->size(); ++drone_number)
         {
-          if (polygon->empty()) break;
+          // if (polygon->empty()) break;
+
+          if (polygon->size() == 1) 
+          {
+
+            polygon_for_all_drone->at(drone_number).push_back(polygon->at(0));
+            auto iter_polygon = polygon->cbegin();
+            polygon->erase(iter_polygon);
+
+            break;
+          }
           std::shared_ptr<std::vector<std::vector<float>>> drone_weights = std::make_shared<std::vector<std::vector<float>>>();  // TODO перенести в фор для дронов
           std::shared_ptr<std::vector<geometry_msgs::msg::Point32>> busy_centers_of_the_zones_c_z = std::make_shared<std::vector<geometry_msgs::msg::Point32>>(); // TODO перенести в фор для дронов
           std::shared_ptr<std::vector<geometry_msgs::msg::Point32>> busy_centers_of_the_zones_e_d = std::make_shared<std::vector<geometry_msgs::msg::Point32>>(); // TODO перенести в фор для дронов
@@ -85,37 +94,47 @@ private:
           std::shared_ptr<std::pair<float, float>>  min_max_c_z = std::make_shared<std::pair<float, float>>(); // TODO перенести в фор для дронов
           std::shared_ptr<std::pair<float, float>>  min_max_e_d = std::make_shared<std::pair<float, float>>(); // TODO перенести в фор для дронов
 
-          find_max_min_average_area(the_areas_of_the_polygon_zones, min_max_average_area); // заполняем min_max_average_area
-          RCLCPP_INFO_STREAM(this->get_logger(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA нашёл МИНИМАЛЬНЫЕ И МАКСИМАЛЬНЫЕ И АНАЛЬНЫЕ площади АААААААААААААААААААА");
+          find_max_min_average_area(the_areas_of_the_polygon_zones, polygon, min_max_average_area); // заполняем min_max_average_area
 
           find_distances_from_the_drone_to_the_center_of_the_zone_and_max_min_distances(drone_number, distances_from_the_drone_to_the_center_of_the_zone, min_max_distance_r, odometry, the_centers_of_the_zones); // заполняем distances_from_the_drone_to_the_center_of_the_zone и min_max_distance_r
-          RCLCPP_INFO_STREAM(this->get_logger(), "НАШЁЛ ДИСТАНЦИИ");
-//////////////////до сюда правильно
-//////////////////ниже походу пизда
-          calculate_busy_centers_of_zones(drone_number, polygon_for_all_drone, busy_centers_of_the_zones_c_z , busy_centers_of_the_zones_e_d, odometry->size());
-          RCLCPP_INFO_STREAM(this->get_logger(), "ПОСЧИТАЛ ЗАНЯТЫЕ ЦЕНТРЫ");
 
-          calculation_of_weights(drone_number, drone_weights, odometry, the_centers_of_the_zones, min_max_average_area, the_areas_of_the_polygon_zones, min_max_distance_r, distances_from_the_drone_to_the_center_of_the_zone, busy_centers_of_the_zones_c_z, min_max_c_z, busy_centers_of_the_zones_e_d, min_max_e_d ); // заполняем drone_weights
-          RCLCPP_INFO_STREAM(this->get_logger(), "ПОСЧИТАЛ ВЕСА");
+          calculate_busy_centers_of_zones(drone_number, polygon_for_all_drone, busy_centers_of_the_zones_c_z , busy_centers_of_the_zones_e_d, odometry->size());
+
+          calculation_of_weights(polygon, drone_number, drone_weights, odometry, the_centers_of_the_zones, min_max_average_area, the_areas_of_the_polygon_zones, min_max_distance_r, distances_from_the_drone_to_the_center_of_the_zone, busy_centers_of_the_zones_c_z, min_max_c_z, busy_centers_of_the_zones_e_d, min_max_e_d ); // заполняем drone_weights
 
           distribution_of_zones_considering_weights(drone_number, odometry, drone_weights, the_centers_of_the_zones, busy_centers_of_the_zones_c_z, busy_centers_of_the_zones_e_d, polygon, polygon_for_all_drone, the_areas_of_the_polygon_zones); // распределение зон учитывая веса
-          RCLCPP_INFO_STREAM(this->get_logger(), "РАСПРЕДЕЛИЛ ЗОНЫ");
 
         }
       }
 
       for (int drone_number = 0; drone_number < polygon_for_all_drone->size(); ++drone_number)
       {
-
+        RCLCPP_INFO(this->get_logger(), "Зоны дрона %i", drone_number);
+        
         uav_msgs::msg::ZoneArray zones_for_drone;
         for (int zone_number = 0; zone_number < polygon_for_all_drone->at(drone_number).size(); ++zone_number)
         {
+          RCLCPP_INFO(this->get_logger(), "Zone number %i", zone_number);
           zones_for_drone.zones.push_back(polygon_for_all_drone->at(drone_number).at(zone_number));
+
+          for (int point_number = 0; point_number < zones_for_drone.zones.at(zone_number).points.size(); ++point_number)
+          {
+              int i = 0;
+              
+              RCLCPP_INFO(this->get_logger(), "       Point:%i  %f", point_number, zones_for_drone.zones.at(zone_number).points.at(point_number).x);
+              RCLCPP_INFO(this->get_logger(), "       Point:%i  %f", point_number, zones_for_drone.zones.at(zone_number).points.at(point_number).y);
+              RCLCPP_INFO(this->get_logger(), "       Point:%i  %f", point_number, zones_for_drone.zones.at(zone_number).points.at(point_number).z);
+              RCLCPP_INFO_STREAM(this->get_logger(), "");
+
+              ++i;
+          }
+
         }
       
         response->zones_for_drones_array.push_back(zones_for_drone);
 
       }
+
       
     }
 
@@ -220,21 +239,7 @@ private:
           polygon_points.y = sum_y_in_array / y_array.size(); //координата у центра зоны
           the_centers_of_the_zones->push_back(polygon_points); //нахождение центра зоны и добавляние её в массив the_centers_of_the_zones
           RCLCPP_INFO(this->get_logger(), "ЦЕНТР ЗОНЫ %i такой: по х = %f по у = %f", zone_number, polygon_points.x, polygon_points.y);
-          // float sum_area; //sum_area и minus_area необходимы для вычисления площади простого многоугольника
-          // float minus_area;
 
-          // for (int index = 1; index < x_array.size(); ++index) //считаем sum_area и minus_area
-          // {
-          //     sum_area += polygon->at(zone_number).points.at(index - 1).x * polygon->at(zone_number).points.at(index).y;
-          //     minus_area += polygon->at(zone_number).points.at(index).x * polygon->at(zone_number).points.at(index - 1).y; 
-          //     if (index + 1 == x_array.size())
-          //     {
-          //       sum_area += polygon->at(zone_number).points.at(index).x * polygon->at(zone_number).points.at(0).y;
-          //       minus_area += polygon->at(zone_number).points.at(0).x * polygon->at(zone_number).points.at(index).y; 
-          //     }
-          // }
-
-          // float area = abs(sum_area - minus_area) / 2; // нахождение площади зоны
 
           float sum_area = 0.0f; // Инициализация переменной для площади
 
@@ -254,21 +259,20 @@ private:
     }
 
 
-    void find_max_min_average_area(std::shared_ptr<std::vector<float>>  the_areas_of_the_polygon_zones, std::shared_ptr<std::pair<std::pair<float, float>, float>>  min_max_average_area) // нахождение максимальной, минимальной, средней площади среди зон
+    void find_max_min_average_area(std::shared_ptr<std::vector<float>>  the_areas_of_the_polygon_zones,
+                                  std::shared_ptr<std::vector<geometry_msgs::msg::Polygon>> polygon,
+                                  std::shared_ptr<std::pair<std::pair<float, float>, float>>  min_max_average_area) // нахождение максимальной, минимальной, средней площади среди зон
     {
         
-        RCLCPP_INFO_STREAM(this->get_logger(), "защёл в файнд макс");
 
         float min_area = the_areas_of_the_polygon_zones->at(0);
         float max_area = 0.0;
         float average_area = 0.0;
-        RCLCPP_INFO_STREAM(this->get_logger(), "защёл в файнд макс");
 
         for (const auto& area : *the_areas_of_the_polygon_zones)
 
         // нахождение максимальной и минимальной площади среди зон
         {
-          RCLCPP_INFO_STREAM(this->get_logger(), "защёл в файнд макс");
           
           if (area > max_area)
           {
@@ -280,7 +284,13 @@ private:
             min_area = area;
           }
         }
-        RCLCPP_INFO_STREAM(this->get_logger(), "защёл в файнд макс");
+
+        if (polygon->size() == 2)
+        {
+          min_max_average_area->first.first = min_area; // заполнение минимальной, средней и максимальной площади зоны
+          min_max_average_area->first.second = max_area;
+          return;
+        }
 
         div_t average_of_zones_number = div(the_areas_of_the_polygon_zones->size(), 2); // Нахождение средней площади зоны среди всех зон
         if (the_areas_of_the_polygon_zones->size() % 2 == 0)
@@ -289,12 +299,9 @@ private:
         }
         else average_area = the_areas_of_the_polygon_zones->at(average_of_zones_number.quot + average_of_zones_number.rem);
 
-        RCLCPP_INFO(this->get_logger(), "минимум ареа = %f минимум ареа = %f минимум ареа = %f ", min_area, average_area, max_area);
-
         min_max_average_area->first.first = min_area; // заполнение минимальной, средней и максимальной площади зоны
         min_max_average_area->first.second = max_area;
         min_max_average_area->second = average_area;
-        RCLCPP_INFO_STREAM(this->get_logger(), "защёл в файнд макс");
 
         RCLCPP_INFO(this->get_logger(), "минимальная %f средняя %f максимальная %f ", min_max_average_area->first.first, min_max_average_area->first.second, min_max_average_area->second);
 
@@ -308,10 +315,6 @@ private:
         float x_drone = odometry->at(drone_number).pose.pose.position.x;
         float y_drone = odometry->at(drone_number).pose.pose.position.y;
 
-        RCLCPP_INFO(this->get_logger(), "позиция далбаёба по оси х %f", x_drone);
-        RCLCPP_INFO(this->get_logger(), "позиция далбаёба по оси у %f", y_drone);
-
-        RCLCPP_INFO(this->get_logger(), "количество дронов %i", drone_number);
 
         for (int number_of_zone = 0; number_of_zone < the_centers_of_the_zones->size(); ++number_of_zone) // нахождение расстояния от дрона до центра зон
         {
@@ -323,11 +326,9 @@ private:
 
         }
         
-        RCLCPP_INFO_STREAM(this->get_logger(), "вышел из фора для заполнения distances_from_the_drone_to_the_center_of_the_zone, НАХУЙ");
 
         float min_distance = distances_from_the_drone_to_the_center_of_the_zone->at(0);
         float max_distance = 0.0;
-        RCLCPP_INFO(this->get_logger(), "минимальная дистанция %f максимальная дистанция %f", min_distance, max_distance);
 
         for (int radius_number = 0; radius_number < distances_from_the_drone_to_the_center_of_the_zone->size(); ++radius_number) 
         // нахождение минимального расстояния и максимального расстояния от дрона до центра зон
@@ -351,6 +352,7 @@ private:
 
 
     void calculation_of_weights(
+      std::shared_ptr<std::vector<geometry_msgs::msg::Polygon>> polygon,
       int drone_number,
       std::shared_ptr<std::vector<std::vector<float>>> drone_weights, 
       std::shared_ptr<std::vector<nav_msgs::msg::Odometry>> odometry, 
@@ -364,54 +366,74 @@ private:
       std::shared_ptr<std::vector<geometry_msgs::msg::Point32>> busy_centers_of_the_zones_e_d,
       std::shared_ptr<std::pair<float, float>> min_max_e_d)
     {
-      // drone_weights->clear();
 
 
       std::vector<float> c_z_tmp = calculation_of_the_minimum_and_maximum_c_z(busy_centers_of_the_zones_c_z, the_centers_of_the_zones, min_max_c_z);
       std::vector<float> e_d_tmp = calculation_of_the_minimum_and_maximum_e_d(busy_centers_of_the_zones_e_d, the_centers_of_the_zones, min_max_e_d);
-      RCLCPP_INFO_STREAM(this->get_logger(), "ПОСЧИТАЛ МИНИМУМЫ МАКСИМУМЫ С И Е");
+      for (const auto c_z : c_z_tmp)
+      {
+        RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z = " << c_z);
+
+      }
+      RCLCPP_ERROR_STREAM(this->get_logger(), "МИНИМАЛЬНЫЙ И МАКСИМАЛЬНЫЙ C_Z" << min_max_c_z->first << min_max_c_z->second);
+      RCLCPP_ERROR_STREAM(this->get_logger(), "МИНИМАЛЬНЫЙ И МАКСИМАЛЬНЫЙ e_d" << min_max_e_d->first << min_max_e_d->second);
+            
+      // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z = " << c_z_tmp.size());
+      // RCLCPP_ERROR_STREAM(this->get_logger(), "e_d = " << e_d_tmp.size());
 
       if (c_z_tmp.empty())
       {
-        RCLCPP_INFO_STREAM(this->get_logger(), "c_z_tmp ПУСТОЙ СУКА");
+        RCLCPP_INFO_STREAM(this->get_logger(), "c_z_tmp is empty");
 
       }
-      else RCLCPP_INFO_STREAM(this->get_logger(), "НЕПУСТОЙ!!!!");
+      else RCLCPP_INFO_STREAM(this->get_logger(), "c_z_tmp is NOT empty");
 
       if (e_d_tmp.empty())
       {
-        RCLCPP_INFO_STREAM(this->get_logger(), "e_d_tmp ПУСТОЙ СУКА");
+        RCLCPP_INFO_STREAM(this->get_logger(), "e_d_tmp is empty");
       }
-      else RCLCPP_INFO_STREAM(this->get_logger(), "НЕПУСТОЙ!!!!");
-      
+      else RCLCPP_INFO_STREAM(this->get_logger(), "e_d_tmp is NOT empty");
+
+      for (int index = 0; index < odometry->size(); ++index)
+      {
       drone_weights->emplace_back();
+      }
+
       for (int zone_number = 0; zone_number < the_centers_of_the_zones->size(); ++zone_number) // заполнение массива весов для каждого дрона отдельно
       {
 
-        float b_from_s = b_s(zone_number, min_max_average_area, the_areas_of_the_polygon_zones);
+        float b_from_s = b_s(polygon, zone_number, min_max_average_area, the_areas_of_the_polygon_zones);
 
         float a_from_r = a_r(zone_number, drone_number, min_max_distance_r, distances_from_the_drone_to_the_center_of_the_zone);
 
         float c_from_z = 0.0;
         if (!busy_centers_of_the_zones_c_z->empty())
         {
-          float c_from_z = (min_max_c_z->second - c_z_tmp.at(zone_number)) / (min_max_c_z->second - min_max_c_z->first);
-          RCLCPP_INFO_STREAM(this->get_logger(), "ЗАШЁЛ В ФОР НАХУЙ САЛАМ БИДЖО");
+          // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z = " << c_z_tmp.at(0));
+
+          c_from_z = (min_max_c_z->second - c_z_tmp.at(zone_number)) / (min_max_c_z->second - min_max_c_z->first);
+
+          RCLCPP_ERROR_STREAM(this->get_logger(), "C_from_Z = " << c_from_z);
+
         }
  
         float e_from_d = 0.0;
         if (!busy_centers_of_the_zones_e_d->empty())
         {
-          float e_from_d = (min_max_e_d->second - e_d_tmp.at(zone_number)) / (min_max_e_d->second - min_max_e_d->first);
-          RCLCPP_INFO_STREAM(this->get_logger(), "ЗАШЁЛ В ФОР НАХУЙ САЛАМ БИДЖО");
+          e_from_d = (min_max_e_d->second - e_d_tmp.at(zone_number)) / (min_max_e_d->second - min_max_e_d->first);
+          RCLCPP_ERROR_STREAM(this->get_logger(), "E_from_D = " << c_from_z);
+
         }
+        RCLCPP_INFO_STREAM(this->get_logger(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
         RCLCPP_INFO(this->get_logger(), "a_from_r = %f", a_from_r);
         RCLCPP_INFO(this->get_logger(), "b_from_s = %f", b_from_s);
-        RCLCPP_INFO(this->get_logger(), "c_from_z = %f", c_from_z);
-        RCLCPP_INFO(this->get_logger(), "e_from_d = %f", e_from_d);
+        RCLCPP_INFO_STREAM(this->get_logger(), "C_from_Z = " << c_from_z);
+        RCLCPP_INFO_STREAM(this->get_logger(), "E_from_D = " << e_from_d);
+        RCLCPP_INFO_STREAM(this->get_logger(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
-        float weight = (a_from_r + b_from_s - c_from_z - e_from_d) / 2; // weight = (a(r) + b(s)) / 2 - вес 
+
+        float weight = (2*a_from_r + b_from_s - c_from_z - e_from_d) / 2; // weight = (a(r) + b(s)) / 2 - вес 
 
         drone_weights->at(drone_number).push_back(weight); 
         RCLCPP_INFO(this->get_logger(), "ВЕС НОМЕР %i РАВЕН %f", zone_number, weight);
@@ -422,8 +444,12 @@ private:
     }
 
 
-    float b_s(int weight_number, std::shared_ptr<std::pair<std::pair<float, float>, float>>  min_max_average_area, std::shared_ptr<std::vector<float>>  the_areas_of_the_polygon_zones)
+    float b_s(std::shared_ptr<std::vector<geometry_msgs::msg::Polygon>> polygon,
+              int weight_number, 
+              std::shared_ptr<std::pair<std::pair<float, float>, float>>  min_max_average_area, 
+              std::shared_ptr<std::vector<float>>  the_areas_of_the_polygon_zones)
     {
+      float b_from_s = 0.0; // b(s)
 
       //min_max_average_area->first.first - минимальная площадь
       //min_max_average_area->first.second - максимальная площадь
@@ -432,12 +458,17 @@ private:
       
       float min_ar = min_max_average_area->first.first;
       float max_ar = min_max_average_area->first.second;
+
+      if (polygon->size() == 2)
+      {
+        b_from_s = (the_areas_of_the_polygon_zones->at(weight_number) - min_ar + 0.0f)/(max_ar - min_ar); // b(s)
+        return b_from_s;
+      }
+
       float average_ar = min_max_average_area->second;
 
       RCLCPP_INFO(this->get_logger(), "min_ar = %f max_ar = %f average_ar = %f the_areas_of_the_polygon_zones->at(weight_number) = %f", min_ar, max_ar, average_ar, the_areas_of_the_polygon_zones->at(weight_number));
 
-
-      float b_from_s = 0.0; // b(s)
 
       if (the_areas_of_the_polygon_zones->at(weight_number) < average_ar)
       {
@@ -481,9 +512,6 @@ private:
       std::vector<float> c_z;
       if (!busy_centers_of_the_zones_c_z->empty())
       {
-
-        RCLCPP_INFO_STREAM(this->get_logger(), "не зашёл сюда я надеюсь ");
-        
         for (int zone_candidate_number = 0; zone_candidate_number < the_centers_of_the_zones->size(); ++zone_candidate_number) 
         {
           float distance_c_z;
@@ -499,8 +527,12 @@ private:
 
             float c_z_tmp = busy_centers_of_the_zones_c_z->size() / distance_c_z;
             c_z.push_back(c_z_tmp);
+            // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z и номер индекса" << zone_candidate_number);
+            // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z и номер индекса" << c_z.at(0));
 
         }
+        // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z = " << c_z.at(0));
+        // RCLCPP_ERROR_STREAM(this->get_logger(), "C_Z = " << c_z.size());
 
         float c_z_min = c_z.at(0);
         float c_z_max = 0;
@@ -513,9 +545,10 @@ private:
 
         min_max_c_z->first = c_z_min;
         min_max_c_z->second = c_z_max;
+      
+        return c_z;
 
       }
-      RCLCPP_INFO_STREAM(this->get_logger(), "я сюда ЗАШЁЛ!!!!!!!!! ");
 
       return c_z;
     }
@@ -556,6 +589,8 @@ private:
 
         min_max_e_d->first = e_d_min;
         min_max_e_d->second = e_d_max;
+        
+        return e_d;
 
       }
       return e_d;
@@ -597,8 +632,6 @@ private:
 
       odometry->at(drone_number).pose.pose.position.x = new_x_drone;
       odometry->at(drone_number).pose.pose.position.y = new_y_drone;
-
-      RCLCPP_INFO(this->get_logger(), "НОВАЯ ПОЗИЦИЯ ДРОНА по х = %f по y = %f", the_centers_of_the_zones->at(number_max_weight).x, the_centers_of_the_zones->at(number_max_weight).y);
 
       RCLCPP_INFO(this->get_logger(), "НОВАЯ ПОЗИЦИЯ ДРОНА Х У %f %f", odometry->at(drone_number).pose.pose.position.x, odometry->at(drone_number).pose.pose.position.y);
 
